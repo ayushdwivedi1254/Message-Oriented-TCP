@@ -1,0 +1,147 @@
+Networks Lab Assignment-5
+
+Group Members: 
+Ayush Kumar Dwivedi(20CS10084)
+Saptarshi De Chaudhury(20CS10080)
+
+################################ Data Structures used ###################################
+
+struct send_element{
+    int sockfd;
+    void* buf;
+    size_t len;
+    int flags;
+} send_element;
+
+send_element is a structure containing:
+1. sockfd - the socket file descriptor
+2. buf - a void pointer which stores the message to be sent
+3. len - the size of the message to be sent in bytes
+4. flags - the input flags
+
+-----------------------------------------------------------------------------------------
+
+struct recv_element{
+    void* buf;
+    size_t len;
+} recv_element;
+
+recv_element is a structure containing:
+1. buf - a void pointer in which the received message will be stored
+2. len - the size of the message received in bytes
+
+-----------------------------------------------------------------------------------------
+
+send_element **Send_Message;
+
+Array of structure pointers to store the messages to be sent
+
+----------------------------------------------------------------------------------------
+
+recv_element **Received_Message;
+
+Array of structure pointers to store the messages to be received
+
+
+################################### Functions used #######################################
+
+1. int min(int a, int b):
+
+Returns the minimum of 2 integers a and b.
+
+----------------------------------------------------------------------------------------
+
+2. void clear_buffer(void *buf, int n):
+
+Clears the buffer of size n.
+
+----------------------------------------------------------------------------------------
+
+3. void *R(void *param):
+
+Thread Function, handles message received from the TCP socket. It waits on the receive call on the socket and when a message is received, it uses mutex lock, stores the message in the Received_Message table, and unlocks the mutex.
+
+----------------------------------------------------------------------------------------
+
+4. void *S(void *param)
+
+Thread Function, it sleeps for some time and wakes up periodically. If there is any message waiting to be sent in the Send_Message table, then it uses mutex lock, sends the message and clears the corresponding entry in the Send_Message table, then unlocks the mutex.
+
+----------------------------------------------------------------------------------------
+
+5. int my_bind(int sockfd, const struct sockaddr *addr, socklen_t addrlen)
+
+It is a wrapper around the bind function, calls the bind function with the given parameters and returns the return value.
+
+----------------------------------------------------------------------------------------
+
+6. int my_listen(int sockfd, int backlog)
+
+It is a wrapper around the listen function, calls the listen function with the given parameters and returns the return value. 
+
+----------------------------------------------------------------------------------------
+
+7. int my_accept(int sockfd, struct sockaddr *addr, socklen_t *addrlen)
+
+It is a wrapper around the accept function, calls the accept function with the given parameters and returns the return value. 
+
+----------------------------------------------------------------------------------------
+
+8. int my_connect(int sockfd, const struct sockaddr * addr, socklen_t addrlen)
+
+It is a wrapper around the connect function, calls the connect function with the given parameters and returns the return value. 
+
+----------------------------------------------------------------------------------------
+
+9. ssize_t my_send(int sockfd, const void *buf, size_t len, int flags)
+
+When a message is to be sent, it waits until there is space in the Send_Message table, then it uses mutex lock, stores the message in the Send_Message table and unlocks the mutex.
+
+----------------------------------------------------------------------------------------
+
+10. ssize_t my_recv(int sockfd, void *buf, size_t len, int flags)
+
+When a message is to be received, it waits until there is at least one message in the Received_Message table, then it uses mutex lock, stores the message in the buffer and unlocks the mutex.
+
+----------------------------------------------------------------------------------------
+
+11. int my_close(int sockfd)
+
+Sleeps for 5 seconds, then cancels the threads and destroys the mutex, and frees up the message tables. Also it closes the socket.
+
+----------------------------------------------------------------------------------------
+
+12. int my_socket(int domain, int type, int protocol)
+
+Creates the socket and initialises mutexes, creates threads R and S and allocates memory for the Send_Message and Received_Message tables.
+
+----------------------------------------------------------------------------------------
+
+13. recv_element * receive_string(int sockfd)
+
+Calls recv function until the message is read completely, and removes the header and trailer from the message, then returns the received string.
+
+----------------------------------------------------------------------------------------
+
+14. void send_string(int sockfd, void *expression, size_t totlen,int flags)
+
+Calls send function until the message is sent completely (including header and trailer).
+
+################################ WORKFLOW FOR my_send() and my_recv() ###############################
+
+Whenever we call my_send() with a message buf, it gets stored in the Send_Message Table whenever it finds there is enough space in the table. The S thread wakes up after every 1 second and checks if there is any message in the Send_Message Table waiting to be sent. It then calls send_string() function where it encapsulates and sends all the required messages one by one.
+This message will be received by the R thread of the machine on the other side which then extracts the message and stores it in the Received_Message Table by calling the receive_string() function. Whenever my_recv() is called on this machine, it checks if there is any entry in the Received_Message table. If there is one, it extracts the earliest entry from the table and sends it through the specified buffer. 
+
+
+################################  DESIGN FOR MESSAGE BOUNDARIES  ####################################
+
+For designing the message boundaries, we have used the concept of "byte stuffing".
+Whenever the thread S sends a message through send call, we encapsulate the message to be sent between headers and trailers of the form: "*#####"
+So, while sending, whenever we encounter a part of message having "*####" as a substring, we just stuff a "$" after this substring in the message to be sent.
+We do so whenever we encounter such a substring in the message.
+
+On the receive side, we receive as follows:
+First we wait for the header, i.e. "*#####" string to mark the beginning of the message. From then on, we start storing our main message body in the "answer" string. Whenever we receive a string of the form "*####$", we remove the $, i.e. do not include it in our answer string. Finally, whenever we receive "*#####", it indicates that this is the trailer and hence break out.
+
+This is the way we record the beginning and end of each separate message.
+
